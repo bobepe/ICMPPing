@@ -31,7 +31,15 @@ namespace ICMPPing
 
                 writer.WriteEndElement();
                 writer.WriteEndDocument();
-            }         
+            }
+
+            Console.WriteLine("Test dokončen.");
+            Dictionary<string, AvailabilityAddresses> availabilityPercentages = ReadAvailability(fileName);
+            Console.WriteLine("Výsledky testu:");
+            foreach (var kvp in availabilityPercentages)
+            {
+                Console.WriteLine($"IP adresa: {kvp.Key}, Dostupnost: {kvp.Value.AvailabilityPercentages:F2}%");
+            }
         }
 
         static void PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
@@ -50,6 +58,56 @@ namespace ICMPPing
                 int delay = Math.Max(100, 300 - (int)reply.RoundtripTime);
                 Thread.Sleep(delay);
             }
+        }
+
+        static Dictionary<string, AvailabilityAddresses> ReadAvailability(string fileName)
+        {
+            var availabilityPercentages = new Dictionary<string, AvailabilityAddresses>();
+
+            try
+            {
+                using (XmlReader reader = XmlReader.Create(fileName))
+                {
+                    string ipAddress = null;
+
+                    while (reader.Read())
+                    {
+                        if (reader.NodeType == XmlNodeType.Element && reader.Name == "IPAddress")
+                        {
+                            ipAddress = reader.ReadElementContentAsString();
+                        }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.Name == "Status")
+                        {
+                            if (!string.IsNullOrEmpty(ipAddress))
+                            {
+                                string status = reader.ReadElementContentAsString();
+                                bool isSucces = status == "Success";
+
+                                if (availabilityPercentages.ContainsKey(ipAddress))
+                                {
+                                    availabilityPercentages[ipAddress].Total += 1;
+                                    if (isSucces)
+                                    {
+                                        availabilityPercentages[ipAddress].Succes += 1;
+                                    }
+                                }
+                                else
+                                {
+                                    availabilityPercentages.Add(ipAddress, new AvailabilityAddresses() { Total = 1, Succes = isSucces ? 1 : 0 });
+                                }
+
+                                ipAddress = null;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Chyba při čtení XML souboru: {ex.Message}");
+            }
+
+            return availabilityPercentages;
         }
     }
 }
