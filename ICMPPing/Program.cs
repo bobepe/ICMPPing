@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace ICMPPing
 {
@@ -17,30 +19,37 @@ namespace ICMPPing
 
             Console.WriteLine($"Ping na adresu: {address} po dobu {seconds} sekund v intervalu 100ms");
 
-            Ping pingSender = new Ping();
-            PingOptions options = new PingOptions();
-            options.DontFragment = true;
-
-            byte[] buffer = new byte[32];
-            int timeout = 300;
-
             DateTime endTime = DateTime.Now.AddSeconds(seconds);
+            string fileName = "PingResults.xml";
 
-            int successfulPings = 0;
-            int totalPings = 0;
+            using (var writer = XmlWriter.Create(fileName, new XmlWriterSettings() { Indent = true }))
+            {
+                writer.WriteStartDocument();
+                writer.WriteStartElement("PingResults");
+
+                PerformPingTest(address, endTime, writer);
+
+                writer.WriteEndElement();
+                writer.WriteEndDocument();
+            }         
+        }
+
+        static void PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
+        {
             while (DateTime.Now < endTime)
             {
-                PingReply reply = pingSender.Send(address, timeout, buffer, options);
+                PingReply reply = new Ping().Send(ipAddress, 300);
+
                 //Console.WriteLine($"Ping odpověď z {reply.Address}: Odpověď={reply.Status}, Čas={reply.RoundtripTime}ms");
-                if (reply.Status == IPStatus.Success)
-                    successfulPings++;
+                writer.WriteStartElement("PingResult");
+                writer.WriteElementString("IPAddress", ipAddress);
+                writer.WriteElementString("Status", reply.Status.ToString());
+                writer.WriteElementString("RoundtripTime", reply.RoundtripTime.ToString());
+                writer.WriteEndElement();
 
-                totalPings++;
-
-                Thread.Sleep(100);
+                int delay = Math.Max(100, 300 - (int)reply.RoundtripTime);
+                Thread.Sleep(delay);
             }
-
-            Console.WriteLine($"Dostupnost pro {address} je: {successfulPings * 100 / totalPings}%");
         }
     }
 }
