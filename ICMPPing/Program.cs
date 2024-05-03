@@ -12,12 +12,18 @@ namespace ICMPPing
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            string address = "cs.wikipedia.org";
-            int seconds = 60;
+            List<string> ipAddresses = new List<string>
+            {
+                "seznam.cz",
+                "google.cz",
+                "cs.wikipedia.org",
+                "youtube.com",
+                "bing.com"
+            };
 
-            Console.WriteLine($"Ping na adresu: {address} po dobu {seconds} sekund v intervalu 100ms");
+            int seconds = 60;
 
             DateTime endTime = DateTime.Now.AddSeconds(seconds);
             string fileName = "PingResults.xml";
@@ -27,7 +33,17 @@ namespace ICMPPing
                 writer.WriteStartDocument();
                 writer.WriteStartElement("PingResults");
 
-                PerformPingTest(address, endTime, writer);
+                var tasks = new List<Task>();
+
+                foreach (string ipAddress in ipAddresses)
+                {
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        await PerformPingTest(ipAddress, endTime, writer);
+                    }));
+                }
+
+                await Task.WhenAll(tasks);
 
                 writer.WriteEndElement();
                 writer.WriteEndDocument();
@@ -42,21 +58,23 @@ namespace ICMPPing
             }
         }
 
-        static void PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
+        static async Task PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
         {
             while (DateTime.Now < endTime)
             {
-                PingReply reply = new Ping().Send(ipAddress, 300);
+                PingReply reply = await new Ping().SendPingAsync(ipAddress, 300);
 
-                //Console.WriteLine($"Ping odpověď z {reply.Address}: Odpověď={reply.Status}, Čas={reply.RoundtripTime}ms");
-                writer.WriteStartElement("PingResult");
-                writer.WriteElementString("IPAddress", ipAddress);
-                writer.WriteElementString("Status", reply.Status.ToString());
-                writer.WriteElementString("RoundtripTime", reply.RoundtripTime.ToString());
-                writer.WriteEndElement();
+                lock (writer)
+                {
+                    writer.WriteStartElement("PingResult");
+                    writer.WriteElementString("IPAddress", ipAddress);
+                    writer.WriteElementString("Status", reply.Status.ToString());
+                    writer.WriteElementString("RoundtripTime", reply.RoundtripTime.ToString());
+                    writer.WriteEndElement();
+                }
 
                 int delay = Math.Max(100, 300 - (int)reply.RoundtripTime);
-                Thread.Sleep(delay);
+                await Task.Delay(delay);
             }
         }
 
