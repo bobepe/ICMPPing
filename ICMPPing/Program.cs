@@ -14,48 +14,75 @@ namespace ICMPPing
     {
         static async Task Main(string[] args)
         {
-            List<string> ipAddresses = new List<string>
-            {
-                "seznam.cz",
-                "google.cz",
-                "cs.wikipedia.org",
-                "youtube.com",
-                "bing.com"
-            };
-
+            List<string> ipAddresses;
             int seconds = 60;
+
+            if (args.Length < 2 || !int.TryParse(args[0], out seconds))
+            {
+                Console.WriteLine("Použití: ICMPPing.exe <doba v sekundách> <IP1> <IP2> ...");
+                return;
+            }
+
+            //ipAddresses = new List<string>
+            //{
+            //    "seznam.cz",
+            //    "google.cz",
+            //    "cs.wikipedia.org",
+            //    "youtube.com",
+            //    "bing.com"
+            //};
+            ipAddresses = new List<string>();
+            for (int i = 1; i < args.Length; i++)
+            {
+                ipAddresses.Add(args[i]);
+            }
+
 
             DateTime endTime = DateTime.Now.AddSeconds(seconds);
             string fileName = "PingResults.xml";
 
-            using (var writer = XmlWriter.Create(fileName, new XmlWriterSettings() { Indent = true }))
+            try
             {
-                writer.WriteStartDocument();
-                writer.WriteStartElement("PingResults");
-
-                var tasks = new List<Task>();
-
-                foreach (string ipAddress in ipAddresses)
+                Console.WriteLine($"Ping po dobu {seconds} sekund v intervalu 100ms");
+                using (var writer = XmlWriter.Create(fileName, new XmlWriterSettings() { Indent = true }))
                 {
-                    tasks.Add(Task.Run(async () =>
+                    writer.WriteStartDocument();
+                    writer.WriteStartElement("PingResults");
+
+                    var tasks = new List<Task>();
+
+                    foreach (string ipAddress in ipAddresses)
                     {
-                        await PerformPingTest(ipAddress, endTime, writer);
-                    }));
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            await PerformPingTest(ipAddress, endTime, writer);
+                        }));
+                    }
+
+                    await Task.WhenAll(tasks);
+
+                    writer.WriteEndElement();
+                    writer.WriteEndDocument();
                 }
 
-                await Task.WhenAll(tasks);
-
-                writer.WriteEndElement();
-                writer.WriteEndDocument();
+                Console.WriteLine("Test dokončen.\nVýsledky testu:");
+                foreach (string ipAddr in ipAddresses)
+                {
+                    Console.WriteLine($"IP adresa: {ipAddr}, Dostupnost: {GetAvailability(fileName, ipAddr):F2}%");
+                }
+                Console.ReadKey();
             }
-
-            Console.WriteLine("Test dokončen.");
-            Dictionary<string, AvailabilityAddresses> availabilityPercentages = ReadAvailability(fileName);
-            Console.WriteLine("Výsledky testu:");
-            foreach (var kvp in availabilityPercentages)
+            catch (Exception ex)
             {
-                Console.WriteLine($"IP adresa: {kvp.Key}, Dostupnost: {kvp.Value.AvailabilityPercentages:F2}%");
+                Console.WriteLine($"{ex.Message} -> {ex.InnerException.Message}");
             }
+
+            //Dictionary<string, AvailabilityAddresses> availabilityPercentages = ReadAvailability(fileName);
+            //Console.WriteLine("Výsledky testu:");
+            //foreach (var kvp in availabilityPercentages)
+            //{
+            //    Console.WriteLine($"IP adresa: {kvp.Key}, Dostupnost: {kvp.Value.AvailabilityPercentages:F2}%");
+            //}
         }
 
         static async Task PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
@@ -129,6 +156,49 @@ namespace ICMPPing
             }
 
             return availabilityPercentages;
+        }
+
+        static double GetAvailability(string fileName, string ipAddr)
+        {
+            int total = 0;
+            int success = 0;
+
+            try
+            {
+                using (XmlReader reader = XmlReader.Create(fileName))
+                {
+                    string ipAddress = null;
+
+                    while (reader.Read())
+                    {
+                        if (reader.NodeType == XmlNodeType.Element && reader.Name == "IPAddress")
+                        {
+                            ipAddress = reader.ReadElementContentAsString();
+                            if (ipAddress != ipAddr) continue;
+                        }
+                        else if (reader.NodeType == XmlNodeType.Element && reader.Name == "Status" && ipAddress == ipAddr)
+                        {
+                            if (!string.IsNullOrEmpty(ipAddress))
+                            {
+                                string status = reader.ReadElementContentAsString();
+                                bool isSucces = status == "Success";
+
+                                total++;
+                                if (isSucces) success++;
+
+                                ipAddress = null;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Chyba při čtení XML souboru: {ex.Message}");
+            }
+
+            if (total >= success) return success * 100 / total;
+            else return 0.0;
         }
     }
 }
