@@ -23,20 +23,11 @@ namespace ICMPPing
                 return;
             }
 
-            //ipAddresses = new List<string>
-            //{
-            //    "seznam.cz",
-            //    "google.cz",
-            //    "cs.wikipedia.org",
-            //    "youtube.com",
-            //    "bing.com"
-            //};
             ipAddresses = new List<string>();
             for (int i = 1; i < args.Length; i++)
             {
                 ipAddresses.Add(args[i]);
             }
-
 
             DateTime endTime = DateTime.Now.AddSeconds(seconds);
             string fileName = "PingResults.xml";
@@ -76,15 +67,15 @@ namespace ICMPPing
             {
                 Console.WriteLine($"{ex.Message} -> {ex.InnerException.Message}");
             }
-
-            //Dictionary<string, AvailabilityAddresses> availabilityPercentages = ReadAvailability(fileName);
-            //Console.WriteLine("Výsledky testu:");
-            //foreach (var kvp in availabilityPercentages)
-            //{
-            //    Console.WriteLine($"IP adresa: {kvp.Key}, Dostupnost: {kvp.Value.AvailabilityPercentages:F2}%");
-            //}
         }
 
+        /// <summary>
+        /// Provede Ping na danou adresu a výsledek zapíše do souboru
+        /// </summary>
+        /// <param name="ipAddress">ip adresa</param>
+        /// <param name="endTime">doba běhu</param>
+        /// <param name="writer">XmlWriter</param>
+        /// <returns></returns>
         static async Task PerformPingTest(string ipAddress, DateTime endTime, XmlWriter writer)
         {
             while (DateTime.Now < endTime)
@@ -108,56 +99,12 @@ namespace ICMPPing
             }
         }
 
-        static Dictionary<string, AvailabilityAddresses> ReadAvailability(string fileName)
-        {
-            var availabilityPercentages = new Dictionary<string, AvailabilityAddresses>();
-
-            try
-            {
-                using (XmlReader reader = XmlReader.Create(fileName))
-                {
-                    string ipAddress = null;
-
-                    while (reader.Read())
-                    {
-                        if (reader.NodeType == XmlNodeType.Element && reader.Name == "IPAddress")
-                        {
-                            ipAddress = reader.ReadElementContentAsString();
-                        }
-                        else if (reader.NodeType == XmlNodeType.Element && reader.Name == "Status")
-                        {
-                            if (!string.IsNullOrEmpty(ipAddress))
-                            {
-                                string status = reader.ReadElementContentAsString();
-                                bool isSucces = status == "Success";
-
-                                if (availabilityPercentages.ContainsKey(ipAddress))
-                                {
-                                    availabilityPercentages[ipAddress].Total += 1;
-                                    if (isSucces)
-                                    {
-                                        availabilityPercentages[ipAddress].Succes += 1;
-                                    }
-                                }
-                                else
-                                {
-                                    availabilityPercentages.Add(ipAddress, new AvailabilityAddresses() { Total = 1, Succes = isSucces ? 1 : 0 });
-                                }
-
-                                ipAddress = null;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Chyba při čtení XML souboru: {ex.Message}");
-            }
-
-            return availabilityPercentages;
-        }
-
+        /// <summary>
+        /// Vypočte dostupnost pro danou ip adresu
+        /// </summary>
+        /// <param name="fileName">název souboru</param>
+        /// <param name="ipAddr">ip adresa</param>
+        /// <returns>Procento dostupnosti ip adresy</returns>
         static double GetAvailability(string fileName, string ipAddr)
         {
             int total = 0;
