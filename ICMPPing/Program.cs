@@ -73,7 +73,10 @@ namespace ICMPPing
                     writer.WriteEndElement();
                 }
 
-                int delay = Math.Max(100, 300 - (int)reply.RoundtripTime);
+                int delay = 100;
+                int response = (int)reply.RoundtripTime;
+                if (reply.Status == IPStatus.Success && (delay - response) > 0) delay -= response;
+                else delay = 300;
                 await Task.Delay(delay);
             }
         }
